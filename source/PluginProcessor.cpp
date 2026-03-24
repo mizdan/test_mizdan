@@ -1,5 +1,5 @@
 // ============================================================================
-// CleanVowelSynth — DSP implementation
+// CleanVowelSynth — DSP implementation 2024-06
 // See PluginProcessor.h for architecture overview.
 // ============================================================================
 

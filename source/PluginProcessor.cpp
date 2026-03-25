@@ -14,6 +14,7 @@ namespace IDs
     static constexpr auto brightness = "brightness";
     static constexpr auto breath = "breath";
     static constexpr auto aspiration = "aspiration";
+    static constexpr auto roughness = "roughness";
     static constexpr auto vibratoRate = "vibratoRate";
     static constexpr auto vibratoDepth = "vibratoDepth";
     static constexpr auto jitter = "jitter";
@@ -177,6 +178,17 @@ void VowelVoice::reset()
     currentMidiNote = -1;
     jitterState = 0.0f;
     shimmerState = 0.0f;
+    articulationSamples = 0.0f;
+    articulationStrength = 1.0f;
+    releaseSamples = 0.0f;
+    phrasePitchDrift = 0.0f;
+    phrasePitchTarget = 0.0f;
+    phrasePitchHoldSamples = 0.0f;
+    cycleOpenQOffset = 0.0f;
+    cycleReturnScale = 1.0f;
+    cycleAmplitude = 1.0f;
+    cycleBreathLeak = 0.0f;
+    cycleSkew = 0.0f;
     oddCycle = false;
     prevPhase = 0.0f;
     glottalOpenness = 0.0f;
@@ -197,7 +209,7 @@ void VowelVoice::reset()
 // Parameter update
 // ============================================================================
 
-void VowelVoice::setParameters(float m, float fs, float br, float brth, float asp, float vibR, float vibD,
+void VowelVoice::setParameters(float m, float fs, float br, float brth, float asp, float rough, float vibR, float vibD,
                                float jit, float shim, float fDrift,
                                float att, float dec, float sus, float rel, bool fem, float porta)
 {
@@ -206,6 +218,7 @@ void VowelVoice::setParameters(float m, float fs, float br, float brth, float as
     brightness = br;
     breath = brth;
     aspiration = asp;
+    roughness = rough;
     vibratoRate = vibR;
     vibratoDepth = vibD;
     jitterAmt = jit;
@@ -283,16 +296,35 @@ void VowelVoice::updateFormantsSmooth()
     // At 220 Hz: qScale=1.0 (no change), at 523 Hz (C5): ~0.42, capped at 0.35.
     const float qScale = juce::jlimit(0.35f, 1.0f, 220.0f / juce::jmax(frequency, 80.0f));
     const float srf = (float) sr;
+    const float articulationTime = articulationSamples * invSr;
+    const float onsetShape = articulationStrength * std::exp(-articulationTime / 0.11f);
+    const float pitchRise = juce::jlimit(0.0f, 1.0f, (frequency - 220.0f) / 440.0f);
+    const float sustainBloom = juce::jlimit(0.0f, 1.0f, env);
 
     for (size_t i = 0; i < currentFormantsA.size(); ++i)
     {
-        currentFormantsA[i].freq += smoothing * (targetFormantsA[i].freq - currentFormantsA[i].freq);
-        currentFormantsA[i].q    += smoothing * (targetFormantsA[i].q    - currentFormantsA[i].q);
-        currentFormantsA[i].gain += smoothing * (targetFormantsA[i].gain - currentFormantsA[i].gain);
+        const float idx = (float) i;
+        const float pitchCoupling = (i == 0 ? -0.050f : (i == 1 ? 0.020f : 0.012f + 0.010f * idx)) * pitchRise;
+        const float onsetShift = (i == 0 ? 0.045f : (i == 1 ? 0.028f : 0.014f)) * onsetShape;
+        const float releaseSettle = (1.0f - sustainBloom) * 0.010f * (i < 2 ? 1.0f : 0.5f);
+        const float freqScale = 1.0f + pitchCoupling + onsetShift - releaseSettle;
+        const float qMotion = 1.0f + 0.14f * onsetShape - 0.10f * pitchRise;
+        const float gainMotion = 1.0f + (0.16f - 0.025f * idx) * onsetShape + 0.035f * sustainBloom;
 
-        currentFormantsB[i].freq += smoothing * (targetFormantsB[i].freq - currentFormantsB[i].freq);
-        currentFormantsB[i].q    += smoothing * (targetFormantsB[i].q    - currentFormantsB[i].q);
-        currentFormantsB[i].gain += smoothing * (targetFormantsB[i].gain - currentFormantsB[i].gain);
+        const float targetFreqA = targetFormantsA[i].freq * freqScale;
+        const float targetFreqB = targetFormantsB[i].freq * freqScale;
+        const float targetQA = targetFormantsA[i].q * qMotion;
+        const float targetQB = targetFormantsB[i].q * qMotion;
+        const float targetGainA = targetFormantsA[i].gain * gainMotion;
+        const float targetGainB = targetFormantsB[i].gain * gainMotion;
+
+        currentFormantsA[i].freq += smoothing * (targetFreqA - currentFormantsA[i].freq);
+        currentFormantsA[i].q    += smoothing * (targetQA - currentFormantsA[i].q);
+        currentFormantsA[i].gain += smoothing * (targetGainA - currentFormantsA[i].gain);
+
+        currentFormantsB[i].freq += smoothing * (targetFreqB - currentFormantsB[i].freq);
+        currentFormantsB[i].q    += smoothing * (targetQB - currentFormantsB[i].q);
+        currentFormantsB[i].gain += smoothing * (targetGainB - currentFormantsB[i].gain);
 
         filtersA[i].setBandPass(srf, currentFormantsA[i].freq, currentFormantsA[i].q * qScale);
         filtersB[i].setBandPass(srf, currentFormantsB[i].freq, currentFormantsB[i].q * qScale);
@@ -313,6 +345,17 @@ void VowelVoice::startNote(int midiNoteNumber, float velocity)
     envStage = EnvStage::Attack;
     env = 0.0f;
     vibratoOnsetSamples = 0.0f;
+    articulationSamples = 0.0f;
+    articulationStrength = 1.0f;
+    releaseSamples = 0.0f;
+    phrasePitchDrift = 0.0f;
+    phrasePitchTarget = 0.0f;
+    phrasePitchHoldSamples = 0.0f;
+    cycleOpenQOffset = 0.0f;
+    cycleReturnScale = 1.0f;
+    cycleAmplitude = 1.0f;
+    cycleBreathLeak = 0.0f;
+    cycleSkew = 0.0f;
     active = true;
     tailOff = false;
 }
@@ -322,6 +365,11 @@ void VowelVoice::glideToNote(int midiNoteNumber, float velocity)
     currentMidiNote = midiNoteNumber;
     noteVelocity = velocity;
     targetFrequency = (float) juce::MidiMessage::getMidiNoteInHertz(midiNoteNumber);
+    articulationSamples = 0.0f;
+    articulationStrength = 0.38f;
+    releaseSamples = 0.0f;
+    cycleOpenQOffset *= 0.5f;
+    cycleBreathLeak *= 0.8f;
 
     // Multiplicative portamento: frequency *= inc each sample.
     // This gives a glide that is linear in pitch (log-frequency) space,
@@ -341,6 +389,8 @@ void VowelVoice::glideToNote(int midiNoteNumber, float velocity)
     {
         envStage = EnvStage::Attack;
         env = 0.0f;
+        articulationStrength = 0.75f;
+        phrasePitchDrift *= 0.5f;
     }
     tailOff = false;
     active = true;
@@ -358,7 +408,10 @@ void VowelVoice::stopNote(bool allowTailOff)
     }
 
     if (active)
+    {
         envStage = EnvStage::Release;
+        releaseSamples = 0.0f;
+    }
 }
 
 // ============================================================================
@@ -444,25 +497,64 @@ float VowelVoice::processGlottal()
     if (vibratoPhase >= 1.0f)
         vibratoPhase -= 1.0f;
 
+    // --- 3b. Phrase-level intonation ---
+    articulationSamples += 1.0f;
+
+    if (envStage == EnvStage::Release)
+        releaseSamples += 1.0f;
+    else
+        releaseSamples = 0.0f;
+
+    phrasePitchHoldSamples -= 1.0f;
+    if (phrasePitchHoldSamples <= 0.0f)
+    {
+        const float driftRange = female ? 0.0032f : 0.0026f;
+        phrasePitchTarget = (rng.nextFloat() * 2.0f - 1.0f) * driftRange;
+        phrasePitchHoldSamples = (0.18f + 0.20f * rng.nextFloat()) * (float) sr;
+    }
+
+    const float driftSmooth = 1.0f - std::exp(-1.0f / (0.22f * (float) sr));
+    phrasePitchDrift += driftSmooth * (phrasePitchTarget - phrasePitchDrift);
+
+    const float articulationTime = articulationSamples * invSr;
+    const float scoop = -articulationStrength * 0.0075f * std::exp(-articulationTime / 0.055f);
+    const float settle = articulationStrength * 0.0022f
+                       * (articulationTime / 0.035f)
+                       * std::exp(1.0f - articulationTime / 0.035f);
+    const float releaseFall = (envStage == EnvStage::Release)
+                            ? -0.0045f * juce::jlimit(0.0f, 1.0f, releaseSamples / (0.09f * (float) sr))
+                            : 0.0f;
+
     // --- 4. Phase accumulator ---
     const float vib = 1.0f + vibEnv * vibratoDepth * std::sin(2.0f * juce::MathConstants<float>::pi * vibratoPhase);
-    const float f = frequency * vib * (1.0f + jitterAmt * jitterState);
+    const float phrasePitch = juce::jlimit(-0.015f, 0.015f, phrasePitchDrift + scoop + settle + releaseFall);
+    const float f = frequency * vib * (1.0f + jitterAmt * jitterState) * (1.0f + phrasePitch);
     prevPhase = phase;
     phase += f * invSr;
     if (phase >= 1.0f)
     {
         phase -= std::floor(phase);
         oddCycle = !oddCycle;  // flip on each new glottal cycle
+
+        const float cycleVariance = (female ? 1.0f : 0.75f) * juce::jmap(roughness, 0.25f, 1.0f);
+        const float releaseBlend = (envStage == EnvStage::Release) ? 0.5f : 0.0f;
+        cycleOpenQOffset = cycleVariance * 0.010f * (rng.nextFloat() * 2.0f - 1.0f);
+        cycleReturnScale = 1.0f + cycleVariance * 0.07f * (rng.nextFloat() * 2.0f - 1.0f);
+        cycleAmplitude = 1.0f + cycleVariance * 0.06f * (rng.nextFloat() * 2.0f - 1.0f);
+        cycleBreathLeak = cycleVariance * juce::jlimit(0.0f, 0.028f,
+                                                       0.003f + 0.010f * articulationStrength + 0.006f * releaseBlend
+                                                       + 0.006f * rng.nextFloat());
+        cycleSkew = cycleVariance * 0.018f * (rng.nextFloat() * 2.0f - 1.0f);
     }
 
     // --- 5. Alternate-cycle asymmetry ---
     // Models natural vocal fold irregularity (period doubling).
     // Stronger at low pitches (chest voice) and during note onset/offset
     // (where vocal fry naturally occurs).
-    const float asymPitch = juce::jlimit(0.0f, 1.0f, (300.0f - frequency) / 200.0f);
-    const float asymEnv   = juce::jlimit(0.0f, 1.0f, 1.0f - env * 2.5f);
-    const float asymAmt   = 0.15f * juce::jmax(asymPitch, asymEnv * 0.5f);
-    const float oqMod = oddCycle ? (1.0f - 0.06f * asymAmt) : 1.0f;
+    const float asymPitch = juce::jlimit(0.0f, 1.0f, (230.0f - frequency) / 170.0f);
+    const float asymEnv   = juce::jlimit(0.0f, 1.0f, 0.7f - env);
+    const float asymAmt   = roughness * 0.06f * juce::jmax(asymPitch * 0.7f, asymEnv * 0.35f);
+    const float oqMod = oddCycle ? (1.0f - 0.035f * asymAmt) : 1.0f;
     const float ampMod = oddCycle ? (1.0f - asymAmt) : 1.0f;
 
     // --- 6. LF-derivative glottal pulse ---
@@ -473,31 +565,35 @@ float VowelVoice::processGlottal()
     //
     // Female voices: higher open quotient (0.58 vs 0.52) and longer return
     // phase (0.18 vs 0.12) for breathier, less abrupt closure.
-    const float oq = juce::jlimit(0.48f, 0.72f, (female ? 0.58f : 0.52f) - 0.08f * (brightness - 1.0f)) * oqMod;
-    const float rp = (female ? 0.18f : 0.12f) * oqMod;
+    const float oq = juce::jlimit(0.46f, 0.76f,
+                                  ((female ? 0.58f : 0.52f) - 0.08f * (brightness - 1.0f)) * oqMod + cycleOpenQOffset);
+    const float rp = juce::jlimit(0.05f, oq - 0.04f, (female ? 0.18f : 0.12f) * oqMod * cycleReturnScale);
     const float tp = oq - rp;
+    const float warpedPhase = juce::jlimit(0.0f, 0.9999f, phase + cycleSkew * std::sin(2.0f * juce::MathConstants<float>::pi * phase));
 
     float pulse = 0.0f;
 
-    if (phase < tp)
+    if (warpedPhase < tp)
     {
-        const float x = phase / tp;
+        const float x = warpedPhase / tp;
         pulse = std::sin(0.5f * juce::MathConstants<float>::pi * x);
     }
-    else if (phase < oq)
+    else if (warpedPhase < oq)
     {
-        const float x = (phase - tp) / rp;
+        const float x = (warpedPhase - tp) / rp;
         pulse = std::cos(0.5f * juce::MathConstants<float>::pi * x);
     }
 
-    pulse *= ampMod;
+    pulse = pulse * ampMod * cycleAmplitude;
+    if (warpedPhase >= oq)
+        pulse += cycleBreathLeak;
 
     // Track glottal openness for noise modulation in render().
     // During open phase (0 to oq): openness follows the pulse shape.
     // During closed phase (oq to 1): openness is zero.
-    glottalOpenness = (phase < oq) ? (phase < tp ? std::sin(0.5f * juce::MathConstants<float>::pi * (phase / tp))
-                                                  : std::cos(0.5f * juce::MathConstants<float>::pi * ((phase - tp) / rp)))
-                                   : 0.0f;
+    glottalOpenness = (warpedPhase < oq) ? (warpedPhase < tp ? std::sin(0.5f * juce::MathConstants<float>::pi * (warpedPhase / tp))
+                                                              : std::cos(0.5f * juce::MathConstants<float>::pi * ((warpedPhase - tp) / rp)))
+                                         : juce::jlimit(0.0f, 0.25f, cycleBreathLeak * 3.5f);
 
     // --- 7. Spectral tilt ---
     pulse = sourceTilt.process(pulse);
@@ -552,7 +648,16 @@ void VowelVoice::render(juce::AudioBuffer<float>& buffer, int startSample, int n
         // Both use high-passed noise for brightness.
         if (breath > 0.0f || aspiration > 0.0f)
         {
+            const float articulationTime = articulationSamples * invSr;
             const float onsetWeight = juce::jlimit(0.0f, 1.0f, 1.0f - env * 4.0f);
+            const float prePhonation = articulationStrength * 0.85f * std::exp(-articulationTime / 0.012f);
+            const float airBloom = articulationStrength * 0.65f
+                                 * juce::jlimit(0.0f, 1.0f, articulationTime / 0.018f)
+                                 * std::exp(-articulationTime / 0.050f);
+            const float releaseAir = (envStage == EnvStage::Release)
+                                   ? 0.35f * juce::jlimit(0.0f, 1.0f, releaseSamples / (0.025f * (float) sr)) * env
+                                   : 0.0f;
+            const float aspirationShape = juce::jlimit(0.0f, 1.4f, onsetWeight + prePhonation + airBloom + releaseAir);
             const float n = getNoiseSample();
             float noiseLp = noiseTilt.process(n);
             if (female)
@@ -563,8 +668,9 @@ void VowelVoice::render(juce::AudioBuffer<float>& buffer, int startSample, int n
             // Mix 60% modulated + 40% unmodulated to avoid complete silence
             // during closed phase (some turbulence leaks through in real speech).
             const float noiseModulation = 0.4f + 0.6f * glottalOpenness;
-            src += breath * 0.25f * noiseBright * noiseModulation;
-            src += aspiration * onsetWeight * noiseBright * noiseModulation;
+            const float continuousBreath = breath * (0.18f + 0.22f * articulationStrength * std::exp(-articulationTime / 0.090f));
+            src += continuousBreath * noiseBright * noiseModulation;
+            src += aspiration * aspirationShape * noiseBright * noiseModulation;
         }
 
         // Parallel formant filtering: source is fed through two banks of 5
@@ -631,6 +737,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CleanVowelSynthAudioProcesso
     p.push_back(std::make_unique<AudioParameterFloat>(IDs::brightness,    "Brightness",    NormalisableRange<float>(0.75f, 1.5f),     0.9f));
     p.push_back(std::make_unique<AudioParameterFloat>(IDs::breath,        "Breath",        NormalisableRange<float>(0.0f, 0.06f),     0.015f));
     p.push_back(std::make_unique<AudioParameterFloat>(IDs::aspiration,    "Aspiration",    NormalisableRange<float>(0.0f, 0.05f),     0.01f));
+    p.push_back(std::make_unique<AudioParameterFloat>(IDs::roughness,     "Roughness",     NormalisableRange<float>(0.0f, 1.0f),      0.25f));
     p.push_back(std::make_unique<AudioParameterFloat>(IDs::vibratoRate,   "Vibrato Rate",  NormalisableRange<float>(0.0f, 8.0f),      5.5f));
     p.push_back(std::make_unique<AudioParameterFloat>(IDs::vibratoDepth,  "Vibrato Depth", NormalisableRange<float>(0.0f, 0.03f),     0.010f));
     p.push_back(std::make_unique<AudioParameterFloat>(IDs::jitter,        "Jitter",        NormalisableRange<float>(0.0f, 0.006f),    0.0015f));
@@ -677,6 +784,7 @@ void CleanVowelSynthAudioProcessor::processBlock (juce::AudioBuffer<float>& buff
                         *apvts.getRawParameterValue(IDs::brightness),
                         *apvts.getRawParameterValue(IDs::breath),
                         *apvts.getRawParameterValue(IDs::aspiration),
+                        *apvts.getRawParameterValue(IDs::roughness),
                         *apvts.getRawParameterValue(IDs::vibratoRate),
                         *apvts.getRawParameterValue(IDs::vibratoDepth),
                         *apvts.getRawParameterValue(IDs::jitter),

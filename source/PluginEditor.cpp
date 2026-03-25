@@ -7,6 +7,7 @@ namespace IDs
     static constexpr auto brightness = "brightness";
     static constexpr auto breath = "breath";
     static constexpr auto aspiration = "aspiration";
+    static constexpr auto roughness = "roughness";
     static constexpr auto vibratoRate = "vibratoRate";
     static constexpr auto vibratoDepth = "vibratoDepth";
     static constexpr auto jitter = "jitter";
@@ -33,6 +34,7 @@ CleanVowelSynthAudioProcessorEditor::CleanVowelSynthAudioProcessorEditor (CleanV
     addSlider(brightnessSlider, brightnessLabel, "Brightness");
     addSlider(breathSlider, breathLabel, "Breath");
     addSlider(aspirationSlider, aspirationLabel, "Aspiration");
+    addSlider(roughnessSlider, roughnessLabel, "Roughness");
     addSlider(vibratoRateSlider, vibratoRateLabel, "Vibrato Rate");
     addSlider(vibratoDepthSlider, vibratoDepthLabel, "Vibrato Depth");
     addSlider(jitterSlider, jitterLabel, "Jitter");
@@ -50,6 +52,7 @@ CleanVowelSynthAudioProcessorEditor::CleanVowelSynthAudioProcessorEditor (CleanV
     brightnessAttachment = std::make_unique<SliderAttachment>(state, IDs::brightness, brightnessSlider);
     breathAttachment = std::make_unique<SliderAttachment>(state, IDs::breath, breathSlider);
     aspirationAttachment = std::make_unique<SliderAttachment>(state, IDs::aspiration, aspirationSlider);
+    roughnessAttachment = std::make_unique<SliderAttachment>(state, IDs::roughness, roughnessSlider);
     vibratoRateAttachment = std::make_unique<SliderAttachment>(state, IDs::vibratoRate, vibratoRateSlider);
     vibratoDepthAttachment = std::make_unique<SliderAttachment>(state, IDs::vibratoDepth, vibratoDepthSlider);
     jitterAttachment = std::make_unique<SliderAttachment>(state, IDs::jitter, jitterSlider);
@@ -93,15 +96,17 @@ void CleanVowelSynthAudioProcessorEditor::resized()
     const int colW = 150;
     const int rowH = 115;
 
-    std::array<juce::Slider*, 15> sliders = {
+    std::array<juce::Slider*, 16> sliders = {
         &morphSlider, &formantScaleSlider, &brightnessSlider, &breathSlider, &aspirationSlider,
-        &vibratoRateSlider, &vibratoDepthSlider, &jitterSlider, &shimmerSlider, &formantDriftSlider,
+        &roughnessSlider, &vibratoRateSlider, &vibratoDepthSlider, &jitterSlider, &shimmerSlider,
+        &formantDriftSlider,
         &attackSlider, &decaySlider, &sustainSlider, &releaseSlider, &portamentoSlider
     };
 
-    std::array<juce::Label*, 15> labels = {
+    std::array<juce::Label*, 16> labels = {
         &morphLabel, &formantScaleLabel, &brightnessLabel, &breathLabel, &aspirationLabel,
-        &vibratoRateLabel, &vibratoDepthLabel, &jitterLabel, &shimmerLabel, &formantDriftLabel,
+        &roughnessLabel, &vibratoRateLabel, &vibratoDepthLabel, &jitterLabel, &shimmerLabel,
+        &formantDriftLabel,
         &attackLabel, &decayLabel, &sustainLabel, &releaseLabel, &portamentoLabel
     };
 

@@ -84,6 +84,7 @@ public:
                        float brightness,      // [0.75, 1.5]  spectral tilt / open quotient
                        float breath,          // [0, 0.06]    continuous breath noise level
                        float aspiration,      // [0, 0.05]    onset aspiration noise level
+                       float roughness,       // [0, 1]       cycle irregularity / fry amount
                        float vibratoRate,     // [0, 8] Hz    vibrato LFO frequency
                        float vibratoDepth,    // [0, 0.03]    vibrato pitch deviation (fraction)
                        float jitter,          // [0, 0.006]   random pitch perturbation
@@ -199,6 +200,7 @@ private:
     float brightness = 0.9f;
     float breath = 0.015f;
     float aspiration = 0.01f;
+    float roughness = 0.25f;
     float vibratoRate = 5.5f;    // Hz
     float vibratoDepth = 0.010f; // fraction of frequency
     float jitterAmt = 0.0015f;   // pitch jitter amount
@@ -212,6 +214,17 @@ private:
     float driftPhase = 0.0f;           // A/B crossfade oscillator phase
     float jitterState = 0.0f;          // smoothed random pitch deviation
     float shimmerState = 0.0f;         // smoothed random amplitude deviation
+    float articulationSamples = 0.0f;  // elapsed since last note articulation
+    float articulationStrength = 1.0f; // detached notes stronger than legato
+    float releaseSamples = 0.0f;       // elapsed since release stage began
+    float phrasePitchDrift = 0.0f;     // slow phrase-level intonation drift
+    float phrasePitchTarget = 0.0f;    // target for the slow drift
+    float phrasePitchHoldSamples = 0.0f; // countdown to choose a new drift target
+    float cycleOpenQOffset = 0.0f;     // per-cycle open quotient deviation
+    float cycleReturnScale = 1.0f;     // per-cycle return-phase scaling
+    float cycleAmplitude = 1.0f;       // per-cycle source strength variation
+    float cycleBreathLeak = 0.0f;      // incomplete closure amount per cycle
+    float cycleSkew = 0.0f;            // per-cycle phase skew for pulse asymmetry
     bool oddCycle = false;             // alternates each glottal cycle
     float prevPhase = 0.0f;
     float glottalOpenness = 0.0f;      // [0,1] how open the glottis is (for noise modulation)

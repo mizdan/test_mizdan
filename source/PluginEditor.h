@@ -23,15 +23,15 @@ private:
     juce::ToggleButton femaleButton { "Female" };
 
     juce::Slider morphSlider, formantScaleSlider, brightnessSlider, breathSlider, aspirationSlider;
-    juce::Slider vibratoRateSlider, vibratoDepthSlider, jitterSlider, shimmerSlider, formantDriftSlider;
+    juce::Slider roughnessSlider, vibratoRateSlider, vibratoDepthSlider, jitterSlider, shimmerSlider, formantDriftSlider;
     juce::Slider attackSlider, decaySlider, sustainSlider, releaseSlider, portamentoSlider;
 
     juce::Label morphLabel, formantScaleLabel, brightnessLabel, breathLabel, aspirationLabel;
-    juce::Label vibratoRateLabel, vibratoDepthLabel, jitterLabel, shimmerLabel, formantDriftLabel;
+    juce::Label roughnessLabel, vibratoRateLabel, vibratoDepthLabel, jitterLabel, shimmerLabel, formantDriftLabel;
     juce::Label attackLabel, decayLabel, sustainLabel, releaseLabel, portamentoLabel;
 
     std::unique_ptr<SliderAttachment> morphAttachment, formantScaleAttachment, brightnessAttachment, breathAttachment, aspirationAttachment;
-    std::unique_ptr<SliderAttachment> vibratoRateAttachment, vibratoDepthAttachment, jitterAttachment, shimmerAttachment, formantDriftAttachment;
+    std::unique_ptr<SliderAttachment> roughnessAttachment, vibratoRateAttachment, vibratoDepthAttachment, jitterAttachment, shimmerAttachment, formantDriftAttachment;
     std::unique_ptr<SliderAttachment> attackAttachment, decayAttachment, sustainAttachment, releaseAttachment, portamentoAttachment;
     std::unique_ptr<ButtonAttachment> femaleAttachment;
 

@@ -76,6 +76,11 @@ public:
     int getCurrentMidiNote() const noexcept { return currentMidiNote; }
     float getVelocity() const noexcept { return noteVelocity; }
 
+    // Apply pitch bend from MIDI pitch wheel. wheelValue is 0-16383 (8192 = center).
+    void setPitchBend(int wheelValue);
+
+    float pitchBendRange = 1.0f;  // bend range in semitones (up and down)
+
     // Update all synthesis parameters. Called once per processBlock before
     // rendering. Internally calls updateTargets() to recompute formant targets,
     // envelope coefficients, tilt filters, and nasal notch.
@@ -180,6 +185,7 @@ private:
     float portamentoMs = 60.0f;
     float phase = 0.0f;              // glottal phase accumulator [0, 1)
     float phaseIncrement = 0.0f;
+    float pitchBendMultiplier = 1.0f; // multiplier from pitch wheel (1.0 = no bend)
 
     // -- Envelope --
     float env = 0.0f;

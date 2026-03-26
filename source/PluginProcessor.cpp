@@ -26,6 +26,7 @@ namespace IDs
     static constexpr auto releaseMs = "releaseMs";
     static constexpr auto female = "female";
     static constexpr auto portamento = "portamento";
+    static constexpr auto outputGain = "outputGain";
 }
 
 // ============================================================================
@@ -414,6 +415,14 @@ void VowelVoice::stopNote(bool allowTailOff)
     }
 }
 
+void VowelVoice::setPitchBend(int wheelValue)
+{
+    // wheelValue: 0-16383, 8192 = center (no bend)
+    const float bendNorm = (static_cast<float>(wheelValue) - 8192.0f) / 8192.0f; // -1 to +1
+    const float bendSemitones = bendNorm * pitchBendRange;
+    pitchBendMultiplier = std::pow(2.0f, bendSemitones / 12.0f);
+}
+
 // ============================================================================
 // Per-sample processing
 // ============================================================================
@@ -528,7 +537,7 @@ float VowelVoice::processGlottal()
     // --- 4. Phase accumulator ---
     const float vib = 1.0f + vibEnv * vibratoDepth * std::sin(2.0f * juce::MathConstants<float>::pi * vibratoPhase);
     const float phrasePitch = juce::jlimit(-0.015f, 0.015f, phrasePitchDrift + scoop + settle + releaseFall);
-    const float f = frequency * vib * (1.0f + jitterAmt * jitterState) * (1.0f + phrasePitch);
+    const float f = frequency * pitchBendMultiplier * vib * (1.0f + jitterAmt * jitterState) * (1.0f + phrasePitch);
     prevPhase = phase;
     phase += f * invSr;
     if (phase >= 1.0f)
@@ -722,7 +731,7 @@ void VowelVoice::render(juce::AudioBuffer<float>& buffer, int startSample, int n
 // ============================================================================
 
 CleanVowelSynthAudioProcessor::CleanVowelSynthAudioProcessor()
-    : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::mono(), true)),
+    : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMETERS", createParameterLayout())
 {}
 
@@ -749,6 +758,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout CleanVowelSynthAudioProcesso
     p.push_back(std::make_unique<AudioParameterFloat>(IDs::releaseMs,     "Release ms",    NormalisableRange<float>(1.0f, 2000.0f),   280.0f));
     p.push_back(std::make_unique<AudioParameterBool> (IDs::female,        "Female",        true));
     p.push_back(std::make_unique<AudioParameterFloat>(IDs::portamento,    "Portamento ms", NormalisableRange<float>(0.0f, 500.0f),    60.0f));
+    p.push_back(std::make_unique<AudioParameterFloat>(IDs::outputGain,   "Output Volume", NormalisableRange<float>(-6.0f, 16.0f),    0.0f));
 
     return { p.begin(), p.end() };
 }
@@ -763,7 +773,8 @@ void CleanVowelSynthAudioProcessor::releaseResources() {}
 #if ! JucePlugin_IsMidiEffect
 bool CleanVowelSynthAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::mono();
+    const auto& out = layouts.getMainOutputChannelSet();
+    return out == juce::AudioChannelSet::mono() || out == juce::AudioChannelSet::stereo();
 }
 #endif
 
@@ -829,6 +840,10 @@ void CleanVowelSynthAudioProcessor::processBlock (juce::AudioBuffer<float>& buff
                     voice.stopNote(true);
             }
         }
+        else if (msg.isPitchWheel())
+        {
+            voice.setPitchBend(msg.getPitchWheelValue());
+        }
         else if (msg.isAllNotesOff() || msg.isAllSoundOff())
         {
             heldNotes.clear();
@@ -841,6 +856,15 @@ void CleanVowelSynthAudioProcessor::processBlock (juce::AudioBuffer<float>& buff
     // Render remaining samples after last MIDI event
     if (samplePos < buffer.getNumSamples())
         voice.render(buffer, samplePos, buffer.getNumSamples() - samplePos);
+
+    // Apply output volume (dB -> linear)
+    const float gainDb = *apvts.getRawParameterValue(IDs::outputGain);
+    const float gain = juce::Decibels::decibelsToGain(gainDb, -60.0f);
+    buffer.applyGain(0, 0, buffer.getNumSamples(), gain);
+
+    // Copy mono output to any extra channels the host provides
+    for (int ch = 1; ch < buffer.getNumChannels(); ++ch)
+        buffer.copyFrom(ch, 0, buffer, 0, 0, buffer.getNumSamples());
 }
 
 juce::AudioProcessorEditor* CleanVowelSynthAudioProcessor::createEditor()

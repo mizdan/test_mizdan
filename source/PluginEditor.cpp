@@ -19,6 +19,7 @@ namespace IDs
     static constexpr auto releaseMs = "releaseMs";
     static constexpr auto female = "female";
     static constexpr auto portamento = "portamento";
+    static constexpr auto outputGain = "outputGain";
 }
 
 CleanVowelSynthAudioProcessorEditor::CleanVowelSynthAudioProcessorEditor (CleanVowelSynthAudioProcessor& p)
@@ -45,6 +46,8 @@ CleanVowelSynthAudioProcessorEditor::CleanVowelSynthAudioProcessorEditor (CleanV
     addSlider(sustainSlider, sustainLabel, "Sustain");
     addSlider(releaseSlider, releaseLabel, "Release");
     addSlider(portamentoSlider, portamentoLabel, "Portamento");
+    addSlider(outputGainSlider, outputGainLabel, "Volume");
+    outputGainSlider.setTextValueSuffix(" dB");
 
     auto& state = audioProcessor.apvts;
     morphAttachment = std::make_unique<SliderAttachment>(state, IDs::morph, morphSlider);
@@ -63,6 +66,7 @@ CleanVowelSynthAudioProcessorEditor::CleanVowelSynthAudioProcessorEditor (CleanV
     sustainAttachment = std::make_unique<SliderAttachment>(state, IDs::sustain, sustainSlider);
     releaseAttachment = std::make_unique<SliderAttachment>(state, IDs::releaseMs, releaseSlider);
     portamentoAttachment = std::make_unique<SliderAttachment>(state, IDs::portamento, portamentoSlider);
+    outputGainAttachment = std::make_unique<SliderAttachment>(state, IDs::outputGain, outputGainSlider);
 }
 
 void CleanVowelSynthAudioProcessorEditor::addSlider(juce::Slider& slider, juce::Label& label, const juce::String& text)
@@ -96,18 +100,20 @@ void CleanVowelSynthAudioProcessorEditor::resized()
     const int colW = 150;
     const int rowH = 115;
 
-    std::array<juce::Slider*, 16> sliders = {
+    std::array<juce::Slider*, 17> sliders = {
         &morphSlider, &formantScaleSlider, &brightnessSlider, &breathSlider, &aspirationSlider,
         &roughnessSlider, &vibratoRateSlider, &vibratoDepthSlider, &jitterSlider, &shimmerSlider,
         &formantDriftSlider,
-        &attackSlider, &decaySlider, &sustainSlider, &releaseSlider, &portamentoSlider
+        &attackSlider, &decaySlider, &sustainSlider, &releaseSlider, &portamentoSlider,
+        &outputGainSlider
     };
 
-    std::array<juce::Label*, 16> labels = {
+    std::array<juce::Label*, 17> labels = {
         &morphLabel, &formantScaleLabel, &brightnessLabel, &breathLabel, &aspirationLabel,
         &roughnessLabel, &vibratoRateLabel, &vibratoDepthLabel, &jitterLabel, &shimmerLabel,
         &formantDriftLabel,
-        &attackLabel, &decayLabel, &sustainLabel, &releaseLabel, &portamentoLabel
+        &attackLabel, &decayLabel, &sustainLabel, &releaseLabel, &portamentoLabel,
+        &outputGainLabel
     };
 
     for (size_t i = 0; i < sliders.size(); ++i)
